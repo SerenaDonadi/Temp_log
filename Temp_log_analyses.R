@@ -16,9 +16,15 @@ library(car)
 library(visreg)
 library(ggeffects)
 
+# Save entire workspace (creates my_workspace.RData)
+save.image(file = "my_workspace.RData")
+
+# Restore
+load("my_workspace.RData")        # restores all objects
+
 
 #####
-# Read Datasets
+# Read Datasets and subsets
 #####
 
 # read the whole dataset with Swedish cHaracters 
@@ -106,9 +112,11 @@ my_year<-my %>%
             N_in_year= n()
   ) 
 
+##### 
+# exploration plots
+#####
 ggplot(my_year, aes(x = År, y = avg_year_Temperatur)) +
   geom_point(size=2)+ 
-  geom_smooth(method = "loess")+ 
   facet_wrap(~Lokalnamn)+
   theme_bw(base_size=15)
 ggplot(my_year, aes(x = År, y = avg_year_Temperatur)) +
@@ -136,9 +144,119 @@ ggplot(my_year, aes(x = avg_year_Djup, y = avg_year_Temperatur)) +
   facet_wrap(~Lokalnamn)+
   theme_bw(base_size=15)
 
-# explore variation introduced by depth, different instruments, different n of replicates 
-# plot sd of temp
-# explore finer level of aggregation, aggregate by season
-# plot sd vs temp by site, and depth vs temp by site and year/month/day/hour
+
+# mean year temp by site, with error bars of sd, ordered by latitude
+library(dplyr)
+library(ggplot2)
+
+site_means <- my_year |>
+  group_by(Lokalnamn) |>
+  summarise(
+    mean_temp = mean(avg_year_Temperatur, na.rm = TRUE),
+    sd_temp   = sd(avg_year_Temperatur, na.rm = TRUE),
+    avg_Lat   = mean(avg_Lat, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  arrange(avg_Lat) |>
+  mutate(Lokalnamn = factor(Lokalnamn, levels = Lokalnamn))
+
+p <- ggplot(site_means, aes(x = mean_temp, y = Lokalnamn)) +
+  geom_point(size = 2) +
+  geom_errorbarh(aes(xmin = mean_temp - sd_temp, xmax = mean_temp + sd_temp), height = 0.2, alpha = 0.6) +
+  labs(x = "Mean annual temperature (°C)", y = NULL, title = "Mean annual temperature by site") +
+  theme_bw(base_size = 12)
+
+p
+
+# mean seasonal temperature per site ordered by latitude
+site_order <- my_year |>
+  group_by(Lokalnamn) |>
+  summarise(mean_lat = mean(avg_Lat, na.rm = TRUE), .groups = "drop") |>
+  arrange(mean_lat) |>
+  pull(Lokalnamn)
+
+seas_data <- my |>
+  mutate(
+    Månad = as.integer(Månad),
+    season = case_when(
+      Månad %in% c(12,1,2) ~ "Winter",
+      Månad %in% c(3,4,5)   ~ "Spring",
+      Månad %in% c(6,7,8)   ~ "Summer",
+      Månad %in% c(9,10,11) ~ "Autumn",
+      TRUE ~ NA_character_
+    ),
+    season_year = if_else(Månad == 12, År + 1L, År) # If the month is December, assign the observation to next year; otherwise, keep the current year.
+  ) |>
+  filter(!is.na(season)) |>
+  group_by(Lokalnamn, season, season_year) |>
+  summarise(
+    mean_temp = mean(Temperatur, na.rm = TRUE),
+    sd_temp   = sd(Temperatur, na.rm = TRUE),
+    n = n(),
+    .groups = "drop"
+  ) |>
+  mutate(Lokalnamn = factor(Lokalnamn, levels = site_order))
+
+p_season <- ggplot(seas_data, aes(x = season_year, y = mean_temp, color = season, group = season)) +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_temp - sd_temp, ymax = mean_temp + sd_temp), width = 0.2, alpha = 0.6) +
+  geom_point(size = 1.8) +
+  facet_wrap(~Lokalnamn) +
+  labs(x = "Year", y = "Mean temperature (°C)", color = "Season") +
+  theme_bw(base_size = 12)
+
+p_season
+
+# influence of depth on temperature, by site
+depth_plot_data <- my |>
+  mutate(
+    Månad = as.integer(Månad),
+    season = case_when(
+      Månad %in% c(12,1,2) ~ "Winter",
+      Månad %in% c(3,4,5)   ~ "Spring",
+      Månad %in% c(6,7,8)   ~ "Summer",
+      Månad %in% c(9,10,11) ~ "Autumn",
+      TRUE ~ NA_character_
+    )
+  ) |>
+  filter(!is.na(Djup), !is.na(season))
+
+p_depth <- ggplot(depth_plot_data, aes(x = Djup, fill = season)) +
+  geom_histogram(bins = 30, color = "white", position = "stack") +
+  facet_wrap(~Xkoordinat, scales = "free_y") +
+  labs(x = "Depth (Djupt)", y = "Count", fill = "Season") +
+  theme_bw(base_size = 12)
+
+p_depth
+
+# R
+scatter_data <- my |>
+  mutate(
+    Månad = as.integer(Månad),
+    season = case_when(
+      Månad %in% c(12,1,2) ~ "Winter",
+      Månad %in% c(3,4,5)   ~ "Spring",
+      Månad %in% c(6,7,8)   ~ "Summer",
+      Månad %in% c(9,10,11) ~ "Autumn",
+      TRUE ~ NA_character_
+    ),
+    Djup = as.numeric(as.character(Djup)),
+    Lokalnamn = factor(Lokalnamn, levels = site_order)
+  ) |>
+  filter(!is.na(Djup), !is.na(Temperatur), !is.na(season))
+
+p_depth_scatter <- ggplot(scatter_data, aes(x = Djup, y = Temperatur, color = season)) +
+  geom_jitter(width = 0.1, height = 0, alpha = 0.6, size = 1.25) +
+  facet_wrap(~Lokalnamn, scales = "free_x") +
+  scale_color_brewer(palette = "Set2") +
+  labs(x = "Djup (m)", y = "Temperatur (°C)", color = "Season") +
+  theme_bw(base_size = 12)
+
+p_depth_scatter
 
 
+######
+# Modelling
+######
+
+#
