@@ -350,6 +350,7 @@ summary(M2)
 anova(M2) # useful when I have a factor, gives a overall F test
 plot(M2)
 
+# M3 TO RUN
 # without corr str, and with site as random slope over seasonality (location-specific seasonality)
 M3<-gam(avg_day_Temperatur ~ avg_day_Djup +
           s(time, k = 30) +
@@ -363,52 +364,70 @@ anova(M3) # useful when I have a factor, gives a overall F test
 plot(M3)
 
 
+# I should introduce an interaction depth*season
 
 
+# using different smoothers for different sites (I think site is now fixed, not random):
+# run for few sites at a time to shorten computational time, skip seasonal component for now but introduce interaction depth*season:
+M4<-gam(avg_day_Temperatur ~ avg_day_Djup*season + 
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "1 km S Aggarps skola")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "300 m ovan väg")),
+        data = my_day2, method = "REML")
+summary(M4)
+plot(M4)
+# run for few sites at a time to shorten computational time, use seasonal component as smoother, no interaction depth*season:
+M5<-gam(avg_day_Temperatur ~ avg_day_Djup + 
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "1 km S Aggarps skola")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "300 m ovan väg"))+
+          s(doy, bs = "fs"),
+        data = my_day2, method = "REML")
+summary(M5)
+plot(M5)
+
+# check autocorrelation
 
 
-
-# model with no temporal correl  - wrong, don't run
-M1<-gam(avg_day_Temperatur ~ avg_day_Djup*season + 
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "1 km S Aggarps skola")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "300 m ovan väg")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "700 m uppströms Mörtsjön")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Arålund")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "E4:an Nr 2")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Fredriksdal")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "G:a Stenbron")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "G:a järnvägsbron")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Gamla Kvarnen")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Gravbacka")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Huvudfåran")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Hästgången")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Jockara Fäbod")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Kopparhemmet")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Källsjöklack")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Laxbäcken Övre")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Lyckemyran")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Munkhättan")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Mynningsnära")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Ned Sågen")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Nedre")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Nedströms Bosgårdsfallet")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Ovan E4:an")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Ovan väg")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Ryerna")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Sandån Nedre")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Sandån övre")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Storsele")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Stråfulnäset övre")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Sågverket")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Tangådalsstugan Ö fåran")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Vedema")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Vid Vägen")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Vingäng nedre")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Västra Lövås")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Västra Styberget")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Ängarna")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Åbro")) +
-          s(År,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Övre Ejgst")), 
+# full
+M0<-gam(avg_day_Temperatur ~ avg_day_Djup*season + 
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "1 km S Aggarps skola")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "300 m ovan väg")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "700 m uppströms Mörtsjön")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Arålund")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "E4:an Nr 2")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Fredriksdal")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "G:a Stenbron")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "G:a järnvägsbron")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Gamla Kvarnen")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Gravbacka")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Huvudfåran")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Hästgången")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Jockara Fäbod")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Kopparhemmet")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Källsjöklack")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Laxbäcken Övre")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Lyckemyran")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Munkhättan")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Mynningsnära")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Ned Sågen")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Nedre")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Nedströms Bosgtimedsfallet")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Ovan E4:an")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Ovan väg")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Ryerna")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Sandån Nedre")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Sandån övre")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Storsele")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Stråfulnäset övre")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Sågverket")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Tangådalsstugan Ö ftimean")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Vedema")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Vid Vägen")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Vingäng nedre")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Västra Lövås")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Västra Styberget")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Ängarna")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Åbro")) +
+          s(time,fx = FALSE, k = -1, bs = "cr", by = as.numeric(Lokalnamn == "Övre Ejgst")), 
         method = "REML", data=my_day)
 
 summary(M1)
