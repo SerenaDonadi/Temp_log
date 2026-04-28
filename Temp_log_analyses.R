@@ -513,6 +513,8 @@ M6_ar1 <- bam(
   rho = 0.9179998,          # estimated from resid
   AR.start = my_day2$start_event
 )
+summary(M6_ar1)
+plot(M6_ar1)
 
 # Validate again
 acf(resid(M6_ar1, type = "pearson"))
