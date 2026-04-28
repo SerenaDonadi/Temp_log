@@ -370,7 +370,6 @@ summary(M3)
 anova(M3) # useful when I have a factor, gives a overall F test
 plot(M3)
 
-# without corr str, and with site as random slope over time AND over season
 # risks:data per site are sparse or irregular across the year. check:
 #####
 # Number of observations per site: differs bc different number of sampling years
@@ -411,7 +410,7 @@ ggplot(my_day2, aes(x = doy, y = Lokalnamn)) +
   labs(x = "Day of year", y = "Site") +
   theme_bw()
 #####
-# TO DO
+# without corr str, and with site as random slope over time AND over season
 M6 <- gam(
   avg_day_Temperatur ~ avg_day_Djup +
     s(time, k = 30) +
@@ -511,7 +510,7 @@ M6_ar1 <- bam(
     s(doy, Lokalnamn, bs = "fs"),
   data = my_day2,
   method = "REML",
-  rho = 0.3,          # initial guess
+  rho = 0.9179998,          # estimated from resid
   AR.start = my_day2$start_event
 )
 
@@ -609,7 +608,7 @@ plot(M0)
 # data SERS
 #####
 library(readr)
-guess_encoding("SERS_Blekinge.csv", n_max = 1000)
+guess_encoding("SERS_Dalarna.csv", n_max = 1000)
 # try both encoding = "" and fileEncoding = ""
 Blekinge<- read.csv2("SERS_Blekinge.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
 Dalarna<- read.csv2("SERS_Dalarna.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
@@ -632,5 +631,5 @@ Västmanland<- read.csv2("SERS_Västmanland.csv",fileEncoding ="UTF-8",  header=
 Västra_Götaland<- read.csv2("SERS_Västra_Götaland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
 Örebro<- read.csv2("SERS_Örebro.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
 Östergötland<- read.csv2("SERS_Östergötland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-
+head(Uppsala)
 
