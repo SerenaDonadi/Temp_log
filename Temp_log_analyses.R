@@ -424,7 +424,7 @@ M6 <- gam(
 summary(M6)
 plot(M6)
 #mgcv‑specific check
-summary(M2)$s.table
+summary(M6)$s.table
 # Red flags: EDF ≈ 0 for many site smooths. Very large SEs. 
 # Warnings about rank deficiency
 
@@ -439,7 +439,17 @@ acf(res, lag.max = 100)
 # Slow decay → under-smoothed long-term trend
 #️ This mixes all sites — it’s only diagnostic, not definitive.
 # Asses autocorrelation within-site 
-par(mfrow = c(3, 3))
+# check if time is monotonic within sites
+time_check <- my_day2 %>%
+  arrange(Lokalnamn, time) %>%
+  group_by(Lokalnamn) %>%
+  summarise(
+    time_ok = all(diff(time) >= 0),
+    .groups = "drop"
+  )
+time_check # ok
+
+par(mfrow = c(1, 1))
 for (s in unique(site)) {
   idx <- site == s
   if (sum(idx) > 20) {   # avoid tiny series
@@ -450,22 +460,39 @@ par(mfrow = c(1, 1))
 # Many sites show lag‑1 correlation → real temporal structure
 # Only a few sites → consider site‑specific solutions
 # Formal test: Durbin–Watson–type diagnostic (by site)
+my_day2$res <- resid(M6, type = "pearson")
 dw_by_site <- my_day2 %>%
-  mutate(res = res) %>%
   arrange(Lokalnamn, time) %>%
   group_by(Lokalnamn) %>%
   summarise(
-    dw = sum(diff(res)^2, na.rm = TRUE) / sum(res^2, na.rm = TRUE)
+    dw = sum(diff(res)^2, na.rm = TRUE) /
+      sum(res^2, na.rm = TRUE),
+    n = n()
   )
-dw_by_site
+dw_by_site # strong autocorrelation
 # DW ≈ 2 → no autocorrelation, DW < 1.5 → positive autocorrelation, DW < 1.2 → strong autocorrelation
+
 # Is autocorrelation actually a problem? Did the smooths already soak it up?
 gam.check(M6)
 # Look for: residual patterns over time, k‑index warnings, patterns in 
 # residual vs time plots.  If increasing k for s(time) removes 
 # autocorrelation → prefer that solution.If autocorrelation remains
 
-# AR(1) model with bam()
+# when you have time (> 18 hours) run this (where k is higher)
+M6 <- gam(
+  avg_day_Temperatur ~ avg_day_Djup +
+    s(time, k = 50) +
+    s(doy, bs = "cc", k = 15) +
+    s(time, Lokalnamn, bs = "fs", k = 15) +
+    s(doy, Lokalnamn, bs = "fs", k = 8),
+  data = my_day2,
+  method = "REML"
+)
+summary(M6)
+plot(M6)
+
+
+# include temp autocorrelation: AR(1) model with bam()
 # create start_event, which must be TRUE at the start of each site time series
 my_day2 <- my_day2 %>%
   arrange(Lokalnamn, time) %>%
@@ -577,5 +604,33 @@ anova(M0) # useful when I have a factor, gives a overall F test
 
 # plots
 plot(M0)
+
+#####
+# data SERS
+#####
+library(readr)
+guess_encoding("SERS_Blekinge.csv", n_max = 1000)
+# try both encoding = "" and fileEncoding = ""
+Blekinge<- read.csv2("SERS_Blekinge.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Dalarna<- read.csv2("SERS_Dalarna.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Gotland<- read.csv2("SERS_Gotland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Gävleborg<- read.csv2("SERS_Gävleborg.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Halland<- read.csv2("SERS_Halland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Jämtland<- read.csv2("SERS_Jämtland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Jönköping<- read.csv2("SERS_Jönköping.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Kalmar<- read.csv2("SERS_Kalmar.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Kronoberg<- read.csv2("SERS_Kronoberg.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Norrbotten<- read.csv2("SERS_Norrbotten.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Skåne<- read.csv2("SERS_Skåne.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Stockholm<- read.csv2("SERS_Stockholm.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Södermanland<- read.csv2("SERS_Södermanland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Uppsala<- read.csv2("SERS_Uppsala.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Värmland<- read.csv2("SERS_Värmland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Västerbotten<- read.csv2("SERS_Västerbotten.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Västernorrland<- read.csv2("SERS_Västernorrland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Västmanland<- read.csv2("SERS_Västmanland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Västra_Götaland<- read.csv2("SERS_Västra_Götaland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Örebro<- read.csv2("SERS_Örebro.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Östergötland<- read.csv2("SERS_Östergötland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
 
 
