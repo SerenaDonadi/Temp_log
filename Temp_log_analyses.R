@@ -478,7 +478,7 @@ gam.check(M6)
 # autocorrelation → prefer that solution.If autocorrelation remains
 
 # when you have time (> 18 hours) run this (where k is higher)
-M6 <- gam(
+M6_k <- gam(
   avg_day_Temperatur ~ avg_day_Djup +
     s(time, k = 50) +
     s(doy, bs = "cc", k = 15) +
@@ -487,9 +487,54 @@ M6 <- gam(
   data = my_day2,
   method = "REML"
 )
-summary(M6)
-plot(M6)
+summary(M6_k)
+plot(M6_k)
+# check corr within sites as above
+#mgcv‑specific check
+summary(M6_k)$s.table
+# Red flags: EDF ≈ 0 for many site smooths. Very large SEs. 
+# Warnings about rank deficiency
 
+# check for Residual temporal autocorrelation:
+# extract normalized (Pearson) residuals
+res_k <- resid(M6_k, type = "pearson")
+time <- my_day2$time
+site <- my_day2$Lokalnamn
+acf(res_k, lag.max = 100)
+# Spikes outside the confidence bands → autocorrelation. 
+# Strong spike at lag 1 → AR(1)-type process
+# Slow decay → under-smoothed long-term trend
+#️ This mixes all sites — it’s only diagnostic, not definitive.
+# Asses autocorrelation within-site 
+par(mfrow = c(1, 1))
+for (s in unique(site)) {
+  idx <- site == s
+  if (sum(idx) > 20) {   # avoid tiny series
+    acf(res_k[idx], main = paste("ACF:", s))
+  }
+}
+par(mfrow = c(1, 1))
+# Many sites show lag‑1 correlation → real temporal structure
+# Only a few sites → consider site‑specific solutions
+# Formal test: Durbin–Watson–type diagnostic (by site)
+my_day2$res_k <- resid(M6_k, type = "pearson")
+dw_by_site <- my_day2 %>%
+  arrange(Lokalnamn, time) %>%
+  group_by(Lokalnamn) %>%
+  summarise(
+    dw = sum(diff(res_k)^2, na.rm = TRUE) /
+      sum(res_k^2, na.rm = TRUE),
+    n = n()
+  )
+dw_by_site # strong autocorrelation
+# DW ≈ 2 → no autocorrelation, DW < 1.5 → positive autocorrelation, DW < 1.2 → strong autocorrelation
+
+# Is autocorrelation actually a problem? Did the smooths already soak it up?
+gam.check(M6_k)
+# Look for: residual patterns over time, k‑index warnings, patterns in 
+# residual vs time plots.If autocorrelation remains:
+
+##### include temp autocorrelation: bam ####
 
 # include temp autocorrelation: AR(1) model with bam()
 # create start_event, which must be TRUE at the start of each site time series
@@ -526,6 +571,19 @@ acf(resid(M6_ar1, type = "pearson"))
 # overall, If autocorrelation exists: Prefer bam() with AR(1) for 
 # short‑term dependence, Prefer richer smooths for long‑term dependence
 
+# bam model with site as random interecpt
+M1_ar1 <- bam(
+  avg_day_Temperatur ~ avg_day_Djup +
+    s(time, k = 30) +
+    s(doy, bs = "cc", k = 10) +
+    s(Lokalnamn, bs = "re"),
+  data = my_day2,
+  method = "REML",
+  rho = 0.7,          # guess estimated 
+  AR.start = my_day2$start_event
+)
+summary(M1_ar1)
+plot(M1_ar1)
 
 # I should introduce an interaction depth*season? see below
 
