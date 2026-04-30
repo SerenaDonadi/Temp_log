@@ -536,6 +536,26 @@ gam.check(M6_k)
 
 ##### include temp autocorrelation: bam ####
 
+# bam model with site as random interecpt
+M1_ar1 <- bam(
+  avg_day_Temperatur ~ avg_day_Djup +
+    s(time, k = 30) +
+    s(doy, bs = "cc", k = 10) +
+    s(Lokalnamn, bs = "re"),
+  data = my_day2,
+  method = "REML",
+  rho = 0.7,          # guess estimated 
+  AR.start = my_day2$start_event
+)
+summary(M1_ar1)
+plot(M1_ar1)
+# alternatives, or additions:
+# increase flexibility with K in: s(time, Lokalnamn, bs = "fs", k = 15)
+# don't use gamm() with many sites (slow, unstable)
+# if Only few sites affected, model them seapartely
+# overall, If autocorrelation exists: Prefer bam() with AR(1) for 
+# short‑term dependence, Prefer richer smooths for long‑term dependence
+
 # include temp autocorrelation: AR(1) model with bam()
 # create start_event, which must be TRUE at the start of each site time series
 my_day2 <- my_day2 %>%
@@ -563,29 +583,70 @@ plot(M6_ar1)
 
 # Validate again
 acf(resid(M6_ar1, type = "pearson"))
+# DOES IT DIFFERE FROM PREVIOUS? YES
+anova(M6_ar1,M1_ar1,test = "Chisq")
+# but since s(time, Lokalnamn) is NOT much supported, I try:
 
-# alternatives, or additions:
-# increase flexibility with K in: s(time, Lokalnamn, bs = "fs", k = 15)
-# don't use gamm() with many sites (slow, unstable)
-# if Only few sites affected, model them seapartely
-# overall, If autocorrelation exists: Prefer bam() with AR(1) for 
-# short‑term dependence, Prefer richer smooths for long‑term dependence
-
-# bam model with site as random interecpt
-M1_ar1 <- bam(
+# same model as above with a different rho:
+M3_ar1 <- bam(
   avg_day_Temperatur ~ avg_day_Djup +
     s(time, k = 30) +
     s(doy, bs = "cc", k = 10) +
-    s(Lokalnamn, bs = "re"),
+    s(time, Lokalnamn, bs = "fs")+
+    s(doy, Lokalnamn, bs = "fs"),
   data = my_day2,
   method = "REML",
-  rho = 0.7,          # guess estimated 
+  rho = 0.8,          # guess estimated 
   AR.start = my_day2$start_event
 )
-summary(M1_ar1)
-plot(M1_ar1)
+summary(M3_ar1)
+plot(M3_ar1)
+anova(M6_ar1,M3_ar1,test = "Chisq")
+acf(resid(M3_ar1, type = "pearson"))
+summary(M3_ar1)$s.table
 
-# I should introduce an interaction depth*season? see below
+# find which sites differ
+# visual inspectioon: to fix and re run
+draw(M3_ar1)
+sapply(M3_ar1$smooth, function(s) s$label) # [1] "s(time)","s(doy)","s(time,Lokalnamn)"
+# [4] "s(doy,Lokalnamn)" 
+
+# extract site‑specific smooth estimates for season
+library(gratia)
+seasonal_sites <- smooth_estimates(
+  M3_ar1,
+  smooth = "s(doy,Lokalnamn)"
+)
+# Large values → strong site‑specific seasonality
+# Identify sites with non‑zero seasonal effects
+seasonal_site_aggregated <- seasonal_sites %>%
+  group_by(Lokalnamn) %>%
+  summarise(
+    max_abs = max(abs(.estimate)),
+    mean_abs = mean(abs(.estimate))
+  ) %>%
+  arrange(desc(mean_abs))
+seasonal_site_aggregated
+print(seasonal_site_aggregated,n =39)
+
+# do the same for deviations of sites from global trend over time
+# extract site‑specific smooth estimates for season
+library(gratia)
+time_sites <- smooth_estimates(
+  M3_ar1,
+  smooth = "s(time,Lokalnamn)"
+)
+# Identify sites with non‑zero seasonal effects
+time_site_aggregated <- time_sites %>%
+  group_by(Lokalnamn) %>%
+  summarise(
+    max_abs = max(abs(.estimate)),
+    mean_abs = mean(abs(.estimate))
+  ) %>%
+  arrange(desc(mean_abs))
+time_site_aggregated
+print(time_site_aggregated,n =39)
+
 
 ##### site as fixed ####
 # using different smoothers for different sites (I think site is now fixed, not random):
