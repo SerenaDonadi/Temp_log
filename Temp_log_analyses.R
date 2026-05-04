@@ -409,7 +409,7 @@ ggplot(my_day2, aes(x = doy, y = Lokalnamn)) +
   geom_point(alpha = 0.3, size = 0.7) +
   labs(x = "Day of year", y = "Site") +
   theme_bw()
-#####
+##### without corr str #####
 # without corr str, and with site as random slope over time AND over season
 M6 <- gam(
   avg_day_Temperatur ~ avg_day_Djup +
@@ -535,6 +535,13 @@ gam.check(M6_k)
 # residual vs time plots.If autocorrelation remains:
 
 ##### include temp autocorrelation: bam ####
+# include temp autocorrelation: AR(1) model with bam()
+# create start_event, which must be TRUE at the start of each site time series
+my_day2 <- my_day2 %>%
+  arrange(Lokalnamn, time) %>%
+  group_by(Lokalnamn) %>%
+  mutate(start_event = row_number() == 1) %>%
+  ungroup()
 
 # bam model with site as random interecpt
 M1_ar1 <- bam(
@@ -556,13 +563,7 @@ plot(M1_ar1)
 # overall, If autocorrelation exists: Prefer bam() with AR(1) for 
 # short‑term dependence, Prefer richer smooths for long‑term dependence
 
-# include temp autocorrelation: AR(1) model with bam()
-# create start_event, which must be TRUE at the start of each site time series
-my_day2 <- my_day2 %>%
-  arrange(Lokalnamn, time) %>%
-  group_by(Lokalnamn) %>%
-  mutate(start_event = row_number() == 1) %>%
-  ungroup()
+# bam model with site as random slope over season and time
 # Estimate rho from residuals of the non‑AR model:
 rho_est <- acf(res, plot = FALSE)$acf[2]
 rho_est
@@ -587,6 +588,7 @@ acf(resid(M6_ar1, type = "pearson"))
 anova(M6_ar1,M1_ar1,test = "Chisq")
 # but since s(time, Lokalnamn) is NOT much supported, I try:
 
+##### BEST model ####
 # same model as above with a different rho:
 M3_ar1 <- bam(
   avg_day_Temperatur ~ avg_day_Djup +
@@ -600,25 +602,18 @@ M3_ar1 <- bam(
   AR.start = my_day2$start_event
 )
 summary(M3_ar1)
-plot(M3_ar1)
-anova(M6_ar1,M3_ar1,test = "Chisq")
-acf(resid(M3_ar1, type = "pearson"))
+plot(M3_ar1) # approximate smoothers
+anova(M6_ar1,M3_ar1,test = "Chisq") # compare to previous models
+acf(resid(M3_ar1, type = "pearson")) # check resid autocorr (but pooled!)
 summary(M3_ar1)$s.table
 
-# find which sites differ
-# visual inspectioon: to fix and re run
-draw(M3_ar1)
-sapply(M3_ar1$smooth, function(s) s$label) # [1] "s(time)","s(doy)","s(time,Lokalnamn)"
-# [4] "s(doy,Lokalnamn)" 
-
+# Identify sites with large deviation from seasonal global trend
 # extract site‑specific smooth estimates for season
-library(gratia)
 seasonal_sites <- smooth_estimates(
   M3_ar1,
   smooth = "s(doy,Lokalnamn)"
 )
 # Large values → strong site‑specific seasonality
-# Identify sites with non‑zero seasonal effects
 seasonal_site_aggregated <- seasonal_sites %>%
   group_by(Lokalnamn) %>%
   summarise(
@@ -646,6 +641,143 @@ time_site_aggregated <- time_sites %>%
   arrange(desc(mean_abs))
 time_site_aggregated
 print(time_site_aggregated,n =39)
+
+##### NICE (and proper plots) ####
+library(gratia)
+draw(M3_ar1) # plot global trends and DEVIATIONS from them
+# sapply(M3_ar1$smooth, function(s) s$label) # [1] "s(time)","s(doy)","s(time,Lokalnamn)"
+# [4] "s(doy,Lokalnamn)" 
+
+### full site‑specific seasonal curve (not deviations) - one panel, no CI
+library(tidyr)
+# Grid for prediction
+newdat <- expand_grid(
+  doy = seq(1, 366, length = 200),
+  Lokalnamn = levels(my_day2$Lokalnamn),
+  time = median(my_day2$time),
+  avg_day_Djup = median(my_day2$avg_day_Djup)
+)
+# Predictions including smooths
+newdat$fit <- predict(M3_ar1, newdat, type = "terms") |>
+  as.data.frame() |>
+  transmute(
+    fit = `s(doy)` + `s(doy,Lokalnamn)`
+  ) |>
+  pull()
+# Plot
+ggplot(newdat, aes(doy, fit, colour = Lokalnamn)) +
+  geom_line() +
+  labs(y = "Seasonal effect (global + Lokalnamn)") +
+  theme_bw()
+
+### full site‑specific seasonal curve (not deviations) - multi panels, with CI
+# plot confidence bands for each Lokalnamn curve
+# Range of doy actually used in the model
+doy_rng <- range(my_day2$doy, na.rm = TRUE)
+
+# Prediction grid
+newdat_season <- expand_grid(
+  doy = seq(doy_rng[1], doy_rng[2], length.out = 365),
+  Lokalnamn = levels(my_day2$Lokalnamn),
+  time = median(my_day2$time, na.rm = TRUE),
+  avg_day_Djup = median(my_day2$avg_day_Djup, na.rm = TRUE)
+)
+
+# Predict on the linear predictor scale with SEs
+pr <- predict(
+  M3_ar1,
+  newdat_season,
+  type = "link",   # linear predictor
+  se.fit = TRUE
+)
+
+# Add fit and confidence bands
+newdat_season <- newdat_season |>
+  mutate(
+    fit   = pr$fit,
+    se    = pr$se.fit,
+    lower = fit - 2 * se,
+    upper = fit + 2 * se
+  )
+
+ggplot(newdat_season, aes(doy, fit)) +
+  geom_ribbon(
+    aes(ymin = lower, ymax = upper),
+    fill = "grey80",
+    alpha = 0.6
+  ) +
+  geom_line(linewidth = 0.8) +
+  facet_wrap(~ Lokalnamn, scales = "free_y") +
+  labs(
+    x = "Day of year",
+    y = "Seasonal effect (global + Lokalnamn)"
+  ) +
+  theme_bw()
+
+
+### full site‑specific long-term curve (not deviations) - one panel no CI
+rng <- range(my_day2$time, na.rm = TRUE)
+newdat2 <- expand_grid(
+  time = seq(rng[1], rng[2], length.out = 1000),
+  Lokalnamn = levels(my_day2$Lokalnamn),
+  doy = median(my_day2$doy, na.rm = TRUE),
+  avg_day_Djup = median(my_day2$avg_day_Djup, na.rm = TRUE)
+)
+# Term-wise predictions
+terms <- predict(M3_ar1, newdat2, type = "terms")
+terms <- as.data.frame(terms)
+# Add full long-term curve
+newdat2$fit <- terms$`s(time)` + terms$`s(time,Lokalnamn)`
+# Plot
+ggplot(newdat2, aes(time, fit, colour = Lokalnamn)) +
+  geom_line(alpha = 0.8) +
+  labs(
+    x = "Time",
+    y = "Long-term effect (global + Lokalnamn)"
+  ) +
+  theme_bw()
+
+### full site‑specific long-term curve (not deviations) - multi panels, with CI
+# plot confidence bands for each Lokalnamn curve
+rng <- range(my_day2$time, na.rm = TRUE)
+newdat2 <- expand_grid(
+  time = seq(rng[1], rng[2], length.out = 1000),
+  Lokalnamn = levels(my_day2$Lokalnamn),
+  doy = median(my_day2$doy, na.rm = TRUE),
+  avg_day_Djup = median(my_day2$avg_day_Djup, na.rm = TRUE)
+)
+
+# Predict smooth contribution with SE
+pr <- predict(
+  M3_ar1,
+  newdat2,
+  type = "link",     # linear predictor
+  se.fit = TRUE
+)
+
+newdat2 <- newdat2 |>
+  mutate(
+    fit = pr$fit,
+    se  = pr$se.fit,
+    lower = fit - 2 * se,
+    upper = fit + 2 * se
+  )
+
+ggplot(newdat2, aes(time, fit)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper),
+              fill = "grey80", alpha = 0.5) +
+  geom_line(linewidth = 0.8) +
+  facet_wrap(~ Lokalnamn, scales = "free_y") +
+  labs(
+    y = "Long-term effect (global + Lokalnamn)",
+    x = "Time"
+  ) +
+  theme_bw()
+
+
+
+
+
 
 
 ##### site as fixed ####
