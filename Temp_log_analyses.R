@@ -94,7 +94,7 @@ my_season<-my %>%
     season_year = if_else(Månad == 12, År + 1L, År) # If the month is December, assign the observation to next year; otherwise, keep the current year.
   ) 
 
-# aggregate
+# aggregate by day
 my_day<-my_season %>% 
   group_by(Lokalnamn, År, Månad, Dygn,season,season_year,Instrumenttyp) %>%
   summarise(avg_day_Temperatur=mean(Temperatur ,na.rm=TRUE),
@@ -105,26 +105,6 @@ my_day<-my_season %>%
             N_in_day= n()
   ) 
 
-my_month<-my %>% 
-  group_by(Lokalnamn, År, Månad) %>%
-  summarise(avg_month_Temperatur=mean(Temperatur ,na.rm=TRUE),
-            sd_month_Temperatur = sd(Temperatur ,na.rm=TRUE),
-            avg_month_Djup=mean(Djup ,na.rm=TRUE),
-            sd_month_Djup=sd(Djup ,na.rm=TRUE),
-            avg_Lat=mean(Xkoordinat,na.rm=TRUE),
-            N_in_month= n()
-  ) 
-
-
-my_year<-my %>% 
-  group_by(Lokalnamn, År) %>%
-  summarise(avg_year_Temperatur=mean(Temperatur ,na.rm=TRUE),
-            sd_year_Temperatur = sd(Temperatur ,na.rm=TRUE),
-            avg_year_Djup=mean(Djup ,na.rm=TRUE),
-            sd_year_Djup=sd(Djup ,na.rm=TRUE),
-            avg_Lat=mean(Xkoordinat,na.rm=TRUE),
-            N_in_year= n()
-  ) 
 
 ##### 
 # exploration plots
@@ -775,12 +755,91 @@ ggplot(newdat2, aes(time, fit)) +
   theme_bw()
 
 
+##### ecological relevant temperature variables ####
+
+# define function CV
+Coefficient_of_variation <- function(x) {
+  CV <- sd(x,na.rm=T)/mean(x,na.rm=T)
+  return(CV)
+}
+
+# aggreagte days in years
+my_year<-my_day2 %>% 
+  group_by(Lokalnamn, År) %>%
+  summarise(avg_year_Temperatur=mean(avg_day_Temperatur ,na.rm=TRUE),
+            sd_across_days_in_year_Temperatur = sd(avg_day_Temperatur ,na.rm=TRUE),
+            max_year_Temperatur = max(avg_day_Temperatur ,na.rm=TRUE),
+            CV_Temperatur_across_days_in_year = Coefficient_of_variation(avg_day_Temperatur),
+            avg_year_temp_Djup=mean(avg_day_Djup ,na.rm=TRUE),
+            avg_Lat=mean(avg_Lat,na.rm=TRUE),
+            N_in_year= n()
+  ) 
+
+# aggregate days in seasons:
+my_season<-my_day2 %>% 
+  group_by(Lokalnamn, season_year, season) %>% # with season year I include in the winter nov and dec of the previous year (and not of the current year)
+  summarise(avg_season_Temperatur=mean(avg_day_Temperatur ,na.rm=TRUE),
+            sd_across_days_in_season_Temperatur = sd(avg_day_Temperatur ,na.rm=TRUE),
+            CV_Temperatur_across_days_in_season = Coefficient_of_variation(avg_day_Temperatur),
+            avg_season_temp_Djup=mean(avg_day_Djup ,na.rm=TRUE),
+            avg_Lat2=mean(avg_Lat,na.rm=TRUE),
+            N_in_season= n()
+  ) 
+head(my_season)
+
+# create columns for each season and variable (go wide):
+library(tidyr)
+my_season_wide <- my_season %>%
+  pivot_wider(
+    names_from  = season,
+    values_from = c(
+      avg_season_Temperatur,
+      sd_across_days_in_season_Temperatur,
+      CV_Temperatur_across_days_in_season,
+      avg_season_temp_Djup,
+      N_in_season
+    ),
+    names_glue = "{.value}_{season}"
+  )
+
+# rename variables:
+my_season_wide2 <- my_season_wide %>%
+  rename_with(
+    ~ gsub("season_", "", .x)
+  )
+my_season_wide2 <- my_season_wide2 %>%
+  rename_with(
+    ~ gsub("Temperatur", "temp", .x)
+  )
+
+# aggregate days in months
+my_month<-my_day2 %>% 
+  group_by(Lokalnamn, År, Månad) %>%
+  summarise(avg_month_Temperatur=mean(avg_day_Temperatur ,na.rm=TRUE),
+            sd_month_Temperatur = sd(avg_day_Temperatur ,na.rm=TRUE),
+            CV_Temperatur_across_days_in_month = Coefficient_of_variation(avg_day_Temperatur),
+            avg_month_temp_Djup=mean(avg_day_Djup ,na.rm=TRUE),
+            avg_Lat3=mean(avg_Lat,na.rm=TRUE),
+            N_in_month= n()
+  ) 
+
+# and then aggregate months in years
+my_month2<-my_month %>% 
+  group_by(Lokalnamn, År) %>%
+  summarise(max_avg_month_temp=max(avg_month_Temperatur ,na.rm=TRUE),
+            mean_avg_month_temp = mean(avg_month_Temperatur ,na.rm=TRUE), # not sure I need this
+            sd_avg_month_temp = sd(avg_month_Temperatur,na.rm=TRUE),
+            CV_temp_across_months_in_year = Coefficient_of_variation(avg_month_Temperatur),
+            mean_avg_month_Djup=mean(avg_month_temp_Djup ,na.rm=TRUE),
+            avg_Lat4=mean(avg_Lat3,na.rm=TRUE)
+  ) 
 
 
 
+## maybe also compute DD??
 
 
-##### site as fixed ####
+##### site as fixed - not optimal ####
 # using different smoothers for different sites (I think site is now fixed, not random):
 # run for few sites at a time to shorten computational time, skip seasonal component for now but introduce interaction depth*season:
 M4<-gam(avg_day_Temperatur ~ avg_day_Djup*season + 
