@@ -766,11 +766,11 @@ Coefficient_of_variation <- function(x) {
 # aggreagte days in years
 my_year<-my_day2 %>% 
   group_by(Lokalnamn, År) %>%
-  summarise(avg_year_Temperatur=mean(avg_day_Temperatur ,na.rm=TRUE),
-            sd_across_days_in_year_Temperatur = sd(avg_day_Temperatur ,na.rm=TRUE),
-            max_year_Temperatur = max(avg_day_Temperatur ,na.rm=TRUE),
-            CV_Temperatur_across_days_in_year = Coefficient_of_variation(avg_day_Temperatur),
-            avg_year_temp_Djup=mean(avg_day_Djup ,na.rm=TRUE),
+  summarise(year_avg_day_temp=mean(avg_day_Temperatur ,na.rm=TRUE),
+            sd_across_days_in_year_temp = sd(avg_day_Temperatur ,na.rm=TRUE),
+            year_max_day_temp = max(avg_day_Temperatur ,na.rm=TRUE),
+            CV_temp_across_days_in_year = Coefficient_of_variation(avg_day_Temperatur),
+            avg_depth_for_year_temp=mean(avg_day_Djup ,na.rm=TRUE),
             avg_Lat=mean(avg_Lat,na.rm=TRUE),
             N_in_year= n()
   ) 
@@ -778,10 +778,10 @@ my_year<-my_day2 %>%
 # aggregate days in seasons:
 my_season<-my_day2 %>% 
   group_by(Lokalnamn, season_year, season) %>% # with season year I include in the winter nov and dec of the previous year (and not of the current year)
-  summarise(avg_season_Temperatur=mean(avg_day_Temperatur ,na.rm=TRUE),
-            sd_across_days_in_season_Temperatur = sd(avg_day_Temperatur ,na.rm=TRUE),
-            CV_Temperatur_across_days_in_season = Coefficient_of_variation(avg_day_Temperatur),
-            avg_season_temp_Djup=mean(avg_day_Djup ,na.rm=TRUE),
+  summarise(season_avg_temp=mean(avg_day_Temperatur ,na.rm=TRUE),
+            sd_across_days_in_season_temp = sd(avg_day_Temperatur ,na.rm=TRUE),
+            CV_temp_across_days_in_season = Coefficient_of_variation(avg_day_Temperatur),
+            avg_depth_for_season_temp=mean(avg_day_Djup ,na.rm=TRUE),
             avg_Lat2=mean(avg_Lat,na.rm=TRUE),
             N_in_season= n()
   ) 
@@ -793,24 +793,17 @@ my_season_wide <- my_season %>%
   pivot_wider(
     names_from  = season,
     values_from = c(
-      avg_season_Temperatur,
-      sd_across_days_in_season_Temperatur,
-      CV_Temperatur_across_days_in_season,
-      avg_season_temp_Djup,
+      season_avg_temp,
+      sd_across_days_in_season_temp,
+      CV_temp_across_days_in_season,
+      avg_depth_for_season_temp,
       N_in_season
     ),
     names_glue = "{.value}_{season}"
   )
-
-# rename variables:
-my_season_wide2 <- my_season_wide %>%
-  rename_with(
-    ~ gsub("season_", "", .x)
-  )
-my_season_wide2 <- my_season_wide2 %>%
-  rename_with(
-    ~ gsub("Temperatur", "temp", .x)
-  )
+head(my_season_wide)
+# rename year for merging:
+my_season_wide <- rename(my_season_wide, År = 'season_year') # first name is the new one, second is the old one
 
 # aggregate days in months
 my_month<-my_day2 %>% 
@@ -830,7 +823,7 @@ my_month2<-my_month %>%
             mean_avg_month_temp = mean(avg_month_Temperatur ,na.rm=TRUE), # not sure I need this
             sd_avg_month_temp = sd(avg_month_Temperatur,na.rm=TRUE),
             CV_temp_across_months_in_year = Coefficient_of_variation(avg_month_Temperatur),
-            mean_avg_month_Djup=mean(avg_month_temp_Djup ,na.rm=TRUE),
+            mean_avg_month_depth=mean(avg_month_temp_Djup ,na.rm=TRUE),
             avg_Lat4=mean(avg_Lat3,na.rm=TRUE)
   ) 
 
@@ -838,8 +831,73 @@ my_month2<-my_month %>%
 
 ## maybe also compute DD??
 
+# merge
+my_temp1<-left_join(my_year, my_season_wide, by = c("Lokalnamn","År")) # 
+my_temp2<-left_join(my_temp1, my_month2, by = c("Lokalnamn","År")) # 
 
-##### site as fixed - not optimal ####
+# export for Erik
+library(openxlsx)
+write.xlsx(my_temp2, file="C:/RprojectsSerena/Temp_log_analyses/my_temp2.xlsx",
+           sheetName = "", colNames = TRUE, rowNames = TRUE, append = F)
+
+# rename for merging:
+my_temp3 <- rename(my_temp2, år = 'År') # first name is the new one, second is the old one
+my_temp3 <- rename(my_temp3, lokal = 'Lokalnamn') # first name is the new one, second is the old one
+
+#####
+# data SERS
+#####
+library(readr)
+guess_encoding("SERS_Dalarna.csv", n_max = 1000)
+# try both encoding = "" and fileEncoding = ""
+Blekinge<- read.csv2("SERS_Blekinge.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Dalarna<- read.csv2("SERS_Dalarna.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Gotland<- read.csv2("SERS_Gotland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Gävleborg<- read.csv2("SERS_Gävleborg.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Halland<- read.csv2("SERS_Halland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Jämtland<- read.csv2("SERS_Jämtland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Jönköping<- read.csv2("SERS_Jönköping.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Kalmar<- read.csv2("SERS_Kalmar.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Kronoberg<- read.csv2("SERS_Kronoberg.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Norrbotten<- read.csv2("SERS_Norrbotten.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Skåne<- read.csv2("SERS_Skåne.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Stockholm<- read.csv2("SERS_Stockholm.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Södermanland<- read.csv2("SERS_Södermanland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Uppsala<- read.csv2("SERS_Uppsala.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Värmland<- read.csv2("SERS_Värmland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Västerbotten<- read.csv2("SERS_Västerbotten.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Västernorrland<- read.csv2("SERS_Västernorrland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Västmanland<- read.csv2("SERS_Västmanland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Västra_Götaland<- read.csv2("SERS_Västra_Götaland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Örebro<- read.csv2("SERS_Örebro.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+Östergötland<- read.csv2("SERS_Östergötland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
+
+head(Uppsala)
+summary(my_temp3)
+unique(Kalmar$lokal)
+unique(my_temp3$lokal)
+is.factor(Kalmar$lokal)
+
+# merge - MODIFY AND RERUN
+my_temp4<-left_join(my_temp3, Blekinge, by = c("lokal","år")) # 
+
+# return a list with the levels of lokal found in both datasets:
+# make first lokal as factors
+my_temp3$lokal <- factor(my_temp3$lokal)
+Blekinge$lokal <- factor(Blekinge$lokal)
+
+intersect(levels(my_temp3$lokal),levels(Stockholm$lokal))
+intersect(levels(my_temp3$avg_Lat4),levels(Stockholm$xkoorvdr))
+
+# alternative script: 
+levels(my_temp3$lokal)[levels(my_temp3$lokal) %in% levels(Blekinge$lokal)]
+levels(my_temp3$lokal)[levels(my_temp3$lokal) %in% levels(Blekinge$lokal)]
+
+
+
+
+
+##### site as fixed - not optimal, leave it ####
 # using different smoothers for different sites (I think site is now fixed, not random):
 # run for few sites at a time to shorten computational time, skip seasonal component for now but introduce interaction depth*season:
 M4<-gam(avg_day_Temperatur ~ avg_day_Djup*season + 
@@ -915,33 +973,3 @@ anova(M0) # useful when I have a factor, gives a overall F test
 
 # plots
 plot(M0)
-
-#####
-# data SERS
-#####
-library(readr)
-guess_encoding("SERS_Dalarna.csv", n_max = 1000)
-# try both encoding = "" and fileEncoding = ""
-Blekinge<- read.csv2("SERS_Blekinge.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Dalarna<- read.csv2("SERS_Dalarna.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Gotland<- read.csv2("SERS_Gotland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Gävleborg<- read.csv2("SERS_Gävleborg.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Halland<- read.csv2("SERS_Halland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Jämtland<- read.csv2("SERS_Jämtland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Jönköping<- read.csv2("SERS_Jönköping.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Kalmar<- read.csv2("SERS_Kalmar.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Kronoberg<- read.csv2("SERS_Kronoberg.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Norrbotten<- read.csv2("SERS_Norrbotten.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Skåne<- read.csv2("SERS_Skåne.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Stockholm<- read.csv2("SERS_Stockholm.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Södermanland<- read.csv2("SERS_Södermanland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Uppsala<- read.csv2("SERS_Uppsala.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Värmland<- read.csv2("SERS_Värmland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Västerbotten<- read.csv2("SERS_Västerbotten.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Västernorrland<- read.csv2("SERS_Västernorrland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Västmanland<- read.csv2("SERS_Västmanland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Västra_Götaland<- read.csv2("SERS_Västra_Götaland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Örebro<- read.csv2("SERS_Örebro.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-Östergötland<- read.csv2("SERS_Östergötland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
-head(Uppsala)
-
