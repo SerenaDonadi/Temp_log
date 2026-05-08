@@ -53,11 +53,13 @@ my<- read.csv2("Totaldata.txt",fileEncoding ="ISO-8859-1",  header=TRUE, sep=";"
 head(my)
 summary(my)
 
-# exploration plots - don't run
-#ggplot(my, aes(x = År, y = Temperatur)) +
-#  geom_point(size=2)+ 
-#  facet_wrap(~Namn)+
-#  theme_bw(base_size=15)
+# add a unique identifier for sites:
+library(crayon)
+my$Xkoordinat<-as.character(my$Xkoordinat)
+my$Ykoordinat<-as.character(my$Ykoordinat)
+# merge coordinates:
+my$coord<-my$Xkoordinat %+% "_" %+% my$Ykoordinat
+head(my)
 
 unique(my$Namn) # 38 rivers
 unique(my$Lokalnamn) # 39 sites
@@ -81,7 +83,7 @@ my_site<-filter(my, Lokalnamn == "1 km S Aggarps skola") %>%
 # OBS: Frekvens..mätningar.dygn. does not correspond to the actual number of measurements in the 
 # dataset, better to calculate my own variable!
 
-my_season<-my %>%
+my2<-my %>%
   mutate(
     Månad = as.integer(Månad),
     season = case_when(
@@ -94,17 +96,18 @@ my_season<-my %>%
     season_year = if_else(Månad == 12, År + 1L, År) # If the month is December, assign the observation to next year; otherwise, keep the current year.
   ) 
 
+
 # aggregate by day
-my_day<-my_season %>% 
-  group_by(Lokalnamn, År, Månad, Dygn,season,season_year,Instrumenttyp) %>%
+my_day<-my2 %>% 
+  group_by(Lokalnamn,coord, Xkoordinat, Ykoordinat, År, Månad, Dygn,season,season_year,Instrumenttyp) %>%
   summarise(avg_day_Temperatur=mean(Temperatur ,na.rm=TRUE),
             sd_day_Temperatur = sd(Temperatur ,na.rm=TRUE),
             avg_day_Djup=mean(Djup ,na.rm=TRUE),
             sd_day_Djup=sd(Djup ,na.rm=TRUE), # it will be zero if only 1 measurement was taken
-            avg_Lat=mean(Xkoordinat,na.rm=TRUE),
             N_in_day= n()
   ) 
 
+head(my_day)
 
 ##### 
 # exploration plots
@@ -765,24 +768,22 @@ Coefficient_of_variation <- function(x) {
 
 # aggreagte days in years
 my_year<-my_day2 %>% 
-  group_by(Lokalnamn, År) %>%
+  group_by(Lokalnamn,coord,Xkoordinat,Ykoordinat, År) %>%
   summarise(year_avg_day_temp=mean(avg_day_Temperatur ,na.rm=TRUE),
             sd_across_days_in_year_temp = sd(avg_day_Temperatur ,na.rm=TRUE),
             year_max_day_temp = max(avg_day_Temperatur ,na.rm=TRUE),
             CV_temp_across_days_in_year = Coefficient_of_variation(avg_day_Temperatur),
             avg_depth_for_year_temp=mean(avg_day_Djup ,na.rm=TRUE),
-            avg_Lat=mean(avg_Lat,na.rm=TRUE),
             N_in_year= n()
   ) 
 
 # aggregate days in seasons:
 my_season<-my_day2 %>% 
-  group_by(Lokalnamn, season_year, season) %>% # with season year I include in the winter nov and dec of the previous year (and not of the current year)
+  group_by(Lokalnamn, coord,Xkoordinat,Ykoordinat,season_year, season) %>% # with season year I include in the winter nov and dec of the previous year (and not of the current year)
   summarise(season_avg_temp=mean(avg_day_Temperatur ,na.rm=TRUE),
             sd_across_days_in_season_temp = sd(avg_day_Temperatur ,na.rm=TRUE),
             CV_temp_across_days_in_season = Coefficient_of_variation(avg_day_Temperatur),
             avg_depth_for_season_temp=mean(avg_day_Djup ,na.rm=TRUE),
-            avg_Lat2=mean(avg_Lat,na.rm=TRUE),
             N_in_season= n()
   ) 
 head(my_season)
@@ -807,24 +808,22 @@ my_season_wide <- rename(my_season_wide, År = 'season_year') # first name is th
 
 # aggregate days in months
 my_month<-my_day2 %>% 
-  group_by(Lokalnamn, År, Månad) %>%
+  group_by(Lokalnamn, coord,Xkoordinat,Ykoordinat, År, Månad) %>%
   summarise(avg_month_Temperatur=mean(avg_day_Temperatur ,na.rm=TRUE),
             sd_month_Temperatur = sd(avg_day_Temperatur ,na.rm=TRUE),
             CV_Temperatur_across_days_in_month = Coefficient_of_variation(avg_day_Temperatur),
             avg_month_temp_Djup=mean(avg_day_Djup ,na.rm=TRUE),
-            avg_Lat3=mean(avg_Lat,na.rm=TRUE),
             N_in_month= n()
   ) 
 
 # and then aggregate months in years
 my_month2<-my_month %>% 
-  group_by(Lokalnamn, År) %>%
+  group_by(Lokalnamn, coord,Xkoordinat,Ykoordinat, År) %>%
   summarise(max_avg_month_temp=max(avg_month_Temperatur ,na.rm=TRUE),
             mean_avg_month_temp = mean(avg_month_Temperatur ,na.rm=TRUE), # not sure I need this
             sd_avg_month_temp = sd(avg_month_Temperatur,na.rm=TRUE),
             CV_temp_across_months_in_year = Coefficient_of_variation(avg_month_Temperatur),
-            mean_avg_month_depth=mean(avg_month_temp_Djup ,na.rm=TRUE),
-            avg_Lat4=mean(avg_Lat3,na.rm=TRUE)
+            mean_avg_month_depth=mean(avg_month_temp_Djup ,na.rm=TRUE)
   ) 
 
 
@@ -840,7 +839,7 @@ library(openxlsx)
 write.xlsx(my_temp2, file="C:/RprojectsSerena/Temp_log_analyses/my_temp2.xlsx",
            sheetName = "", colNames = TRUE, rowNames = TRUE, append = F)
 
-# rename for merging:
+# rename for merging with SERS
 my_temp3 <- rename(my_temp2, år = 'År') # first name is the new one, second is the old one
 my_temp3 <- rename(my_temp3, lokal = 'Lokalnamn') # first name is the new one, second is the old one
 
@@ -872,26 +871,29 @@ Västra_Götaland<- read.csv2("SERS_Västra_Götaland.csv",fileEncoding ="UTF-8"
 Örebro<- read.csv2("SERS_Örebro.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
 Östergötland<- read.csv2("SERS_Östergötland.csv",fileEncoding ="UTF-8",  header=TRUE, sep=";", dec=".") 
 
+# merge them vertically
+all_sers <- rbind(Blekinge, Dalarna, Gotland,Gävleborg,Halland,Jämtland,
+                  Jönköping, Kalmar,Kronoberg,Norrbotten,Skåne,Stockholm,
+                  Södermanland,Uppsala,Värmland,Västerbotten,Västernorrland,
+                  Västmanland,Västra_Götaland,Örebro,Östergötland)
 head(Uppsala)
-summary(my_temp3)
-unique(Kalmar$lokal)
-unique(my_temp3$lokal)
-is.factor(Kalmar$lokal)
+# create a unique identifier for sites to merge with temp log data:
+all_sers$xkoorlok<-as.character(all_sers$xkoorlok)
+all_sers$ykoorlok<-as.character(all_sers$ykoorlok)
+all_sers$coord<-all_sers$xkoorlok %+% "_" %+% all_sers$ykoorlok
 
-# merge - MODIFY AND RERUN
-my_temp4<-left_join(my_temp3, Blekinge, by = c("lokal","år")) # 
-
-# return a list with the levels of lokal found in both datasets:
-# make first lokal as factors
-my_temp3$lokal <- factor(my_temp3$lokal)
-Blekinge$lokal <- factor(Blekinge$lokal)
-
-intersect(levels(my_temp3$lokal),levels(Stockholm$lokal))
-intersect(levels(my_temp3$avg_Lat4),levels(Stockholm$xkoorvdr))
+str(all_sers$coord)
+str(my_temp3$coord)
+# before merging, check overlap:
+# return a list with the levels of coord found in both datasets:
+intersect(levels(my_temp3$coord),levels(all_sers$coord))
 
 # alternative script: 
 levels(my_temp3$lokal)[levels(my_temp3$lokal) %in% levels(Blekinge$lokal)]
 levels(my_temp3$lokal)[levels(my_temp3$lokal) %in% levels(Blekinge$lokal)]
+
+# merge - MODIFY AND RERUN
+temp_sers1<-left_join(my_temp3, all_sers, by = c("coord","år")) # 
 
 
 
